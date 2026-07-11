@@ -6,10 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
+    statusBarColor: Colors.green,
+    statusBarIconBrightness: Brightness.light,
   ));
   runApp(const MyApp());
 }
@@ -57,7 +56,7 @@ class _SplashScreenState extends State<SplashScreen>
       CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
     );
     _controller.forward();
-
+    
     Timer(const Duration(seconds: 3), () {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const WebViewScreen()),
@@ -154,6 +153,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool isLoading = true;
   double progress = 0;
   DateTime? _lastBack;
+  final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
 
   @override
   void initState() {
@@ -212,95 +212,4 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..loadRequest(Uri.parse('https://nayon718.github.io/Temp/'));
   }
 
-  Future<void> _launchExternal(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
-  Future<bool> _onWillPop() async {
-    if (await _controller.canGoBack()) {
-      _controller.goBack();
-      return false;
-    }
-    final now = DateTime.now();
-    if (_lastBack == null || now.difference(_lastBack!) > const Duration(seconds: 2)) {
-      _lastBack = now;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('আবার Back চাপুন অ্যাপ বন্ধ করতে', textAlign: TextAlign.center),
-          duration: Duration(seconds: 2),
-          backgroundColor: Colors.black87,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return false;
-    }
-    return true;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _onWillPop,
-      child: Scaffold(
-        body: RefreshIndicator(
-          onRefresh: () async {
-            await _controller.reload();
-          },
-          color: Colors.green,
-          backgroundColor: Colors.white,
-          child: Stack(
-            children: [
-              WebViewWidget(controller: _controller),
-              if (isLoading && progress < 1)
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    backgroundColor: Colors.transparent,
-                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
-                    minHeight: 3,
-                  ),
-                ),
-              if (isLoading && progress == 0)
-                const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CircularProgressIndicator(color: Colors.green, strokeWidth: 3),
-                      SizedBox(height: 16),
-                      Text('লোড হচ্ছে...', style: TextStyle(color: Colors.green, fontSize: 14)),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-        floatingActionButton: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            FloatingActionButton.small(
-              heroTag: 'refresh',
-              onPressed: () => _controller.reload(),
-              backgroundColor: Colors.green,
-              child: const Icon(Icons.refresh, color: Colors.white),
-            ),
-            const SizedBox(height: 8),
-            FloatingActionButton.small(
-              heroTag: 'home',
-              onPressed: () => _controller.loadRequest(
-                Uri.parse('https://nayon718.github.io/Temp/'),
-              ),
-              backgroundColor: Colors.green.shade700,
-              child: const Icon(Icons.home, color: Colors.white),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+  Future<void>
