@@ -1,0 +1,50 @@
+name: Build CaseForge APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
+      - name: Save custom files
+        run: |
+          mkdir -p _backup
+          cp lib/main.dart _backup/ 2>/dev/null || true
+          cp pubspec.yaml _backup/ 2>/dev/null || true
+
+      - name: Generate Flutter project (Auto creates Android files)
+        run: |
+          flutter create . --project-name caseforge --org com.caseforge --overwrite
+
+      - name: Restore custom files
+        run: |
+          cp _backup/main.dart lib/ 2>/dev/null || true
+          cp _backup/pubspec.yaml . 2>/dev/null || true
+          rm -rf _backup
+
+      - name: Add WebView dependency
+        run: flutter pub add webview_flutter
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Release APK
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CaseForge-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
