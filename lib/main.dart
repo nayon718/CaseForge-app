@@ -1,45 +1,17 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:vibration/vibration.dart';
-import 'package:audioplayers/audioplayers.dart';
 
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
-
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize notifications
-  const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-  const InitializationSettings initializationSettings =
-      InitializationSettings(android: initializationSettingsAndroid);
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-  // Request all permissions
-  await _requestPermissions();
-
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
   ));
-
   runApp(const MyApp());
-}
-
-Future<void> _requestPermissions() async {
-  await Permission.notification.request();
-  await Permission.storage.request();
-  await Permission.camera.request();
-  await Permission.microphone.request();
-  await Permission.location.request();
 }
 
 class MyApp extends StatelessWidget {
@@ -53,7 +25,6 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.green,
         useMaterial3: true,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       home: const SplashScreen(),
     );
@@ -156,7 +127,7 @@ class _SplashScreenState extends State<SplashScreen>
                   width: 200,
                   child: LinearProgressIndicator(
                     backgroundColor: Colors.green.shade100,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
                     minHeight: 4,
                     borderRadius: BorderRadius.circular(2),
                   ),
@@ -183,15 +154,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool isLoading = true;
   double progress = 0;
   DateTime? _lastBack;
-  final AudioPlayer _audioPlayer = AudioPlayer();
 
   @override
   void initState() {
     super.initState();
-    _initWebView();
-  }
-
-  void _initWebView() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFFFFFFFF))
@@ -209,17 +175,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
               progress = 0;
             });
           },
-          onPageFinished: (String url) async {
+          onPageFinished: (String url) {
             setState(() {
               isLoading = false;
               progress = 1;
             });
-            // Haptic feedback on page load
-            HapticFeedback.lightImpact();
-            // Vibrate
-            if (await Vibration.hasVibrator() ?? false) {
-              Vibration.vibrate(duration: 50);
-            }
           },
           onNavigationRequest: (NavigationRequest request) {
             final url = request.url;
@@ -256,14 +216,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-      HapticFeedback.mediumImpact();
     }
   }
 
   Future<bool> _onWillPop() async {
     if (await _controller.canGoBack()) {
       _controller.goBack();
-      HapticFeedback.lightImpact();
       return false;
     }
     final now = DateTime.now();
@@ -282,26 +240,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
     return true;
   }
 
-  Future<void> _showNotification(String title, String body) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'caseforge_channel',
-      'CaseForge Notifications',
-      channelDescription: 'App notifications',
-      importance: Importance.high,
-      priority: Priority.high,
-      showWhen: true,
-      enableVibration: true,
-      playSound: true,
-    );
-    const NotificationDetails details = NotificationDetails(android: androidDetails);
-    await flutterLocalNotificationsPlugin.show(
-      0,
-      title,
-      body,
-      details,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -309,17 +247,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
       child: Scaffold(
         body: RefreshIndicator(
           onRefresh: () async {
-            HapticFeedback.mediumImpact();
             await _controller.reload();
-            await _showNotification('CaseForge', 'পেজ রিফ্রেশ হয়েছে!');
           },
           color: Colors.green,
           backgroundColor: Colors.white,
           child: Stack(
             children: [
               WebViewWidget(controller: _controller),
-
-              // Progress bar
               if (isLoading && progress < 1)
                 Positioned(
                   top: 0,
@@ -328,29 +262,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   child: LinearProgressIndicator(
                     value: progress,
                     backgroundColor: Colors.transparent,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
                     minHeight: 3,
                   ),
                 ),
-
-              // Loading indicator
               if (isLoading && progress == 0)
                 const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      CircularProgressIndicator(
-                        color: Colors.green,
-                        strokeWidth: 3,
-                      ),
+                      CircularProgressIndicator(color: Colors.green, strokeWidth: 3),
                       SizedBox(height: 16),
-                      Text(
-                        'লোড হচ্ছে...',
-                        style: TextStyle(
-                          color: Colors.green,
-                          fontSize: 14,
-                        ),
-                      ),
+                      Text('লোড হচ্ছে...', style: TextStyle(color: Colors.green, fontSize: 14)),
                     ],
                   ),
                 ),
@@ -362,22 +285,16 @@ class _WebViewScreenState extends State<WebViewScreen> {
           children: [
             FloatingActionButton.small(
               heroTag: 'refresh',
-              onPressed: () async {
-                HapticFeedback.mediumImpact();
-                await _controller.reload();
-              },
+              onPressed: () => _controller.reload(),
               backgroundColor: Colors.green,
               child: const Icon(Icons.refresh, color: Colors.white),
             ),
             const SizedBox(height: 8),
             FloatingActionButton.small(
               heroTag: 'home',
-              onPressed: () async {
-                HapticFeedback.mediumImpact();
-                await _controller.loadRequest(
-                  Uri.parse('https://nayon718.github.io/Temp/'),
-                );
-              },
+              onPressed: () => _controller.loadRequest(
+                Uri.parse('https://nayon718.github.io/Temp/'),
+              ),
               backgroundColor: Colors.green.shade700,
               child: const Icon(Icons.home, color: Colors.white),
             ),
