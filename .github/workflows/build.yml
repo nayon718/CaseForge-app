@@ -24,7 +24,7 @@ jobs:
           cp lib/main.dart _backup/ 2>/dev/null || true
           cp pubspec.yaml _backup/ 2>/dev/null || true
 
-      - name: Generate Flutter project (Auto creates Android files)
+      - name: Generate Flutter project
         run: |
           flutter create . --project-name caseforge --org com.caseforge --overwrite
 
@@ -33,6 +33,10 @@ jobs:
           cp _backup/main.dart lib/ 2>/dev/null || true
           cp _backup/pubspec.yaml . 2>/dev/null || true
           rm -rf _backup
+
+      - name: Add Internet Permission to AndroidManifest
+        run: |
+          sed -i 's|<manifest xmlns:android="http://schemas.android.com/apk/res/android">|<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />|' android/app/src/main/AndroidManifest.xml
 
       - name: Add WebView dependency
         run: flutter pub add webview_flutter
