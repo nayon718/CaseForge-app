@@ -1,0 +1,10 @@
+/config.php
+/logger.log
+/logs/*
+!/logs/.gitkeep
+/uploads/reports/*
+!/uploads/reports/.htaccess
+/uploads/payments/*
+!/uploads/payments/.htaccess
+/uploads/gallery/*
+!/uploads/gallery/.htaccess

@@ -1,0 +1,19 @@
+Options -Indexes
+RewriteEngine On
+
+# কনফিগ ও সেনসিটিভ ফোল্ডার সরাসরি অ্যাক্সেস বন্ধ
+RewriteRule ^config\.php$ - [F,L]
+RewriteRule ^config\.sample\.php$ - [F,L]
+RewriteRule ^(includes|database|logs)(/|$) - [F,L]
+
+# ক্লিন URL — সব রিকোয়েস্ট index.php-এ
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+# সিকিউরিটি হেডার (সাপোর্ট থাকলে)
+<IfModule mod_headers.c>
+Header set X-Content-Type-Options "nosniff"
+Header set X-Frame-Options "SAMEORIGIN"
+Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
