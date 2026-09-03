@@ -26,8 +26,8 @@ if (!function_exists('report_submit_action')) {
         if ($declaration !== 1) {
             return ['ok' => false, 'message' => 'অনুগ্রহ করে তথ্য সঠিক বলে ঘোষণা বক্সে টিক দিন।'];
         }
-        if ($categoryId < 1 || $name === '' || $crimeType === '' || $details === '') {
-            return ['ok' => false, 'message' => 'বিভাগ, অভিযুক্তের নাম, অপরাধের ধরন ও বিস্তারিত বিবরণ অবশ্যই দিতে হবে।'];
+        if ($categoryId < 1 || $name === '' || $crimeType === '' || $districtName === '' || $details === '') {
+            return ['ok' => false, 'message' => 'বিভাগ, অভিযুক্তের নাম, অপরাধের ধরন, জেলা ও বিস্তারিত বিবরণ অবশ্যই দিতে হবে।'];
         }
         if (mb_strlen($name) > 150 || mb_strlen($address) > 500 || mb_strlen($details) > 6000) {
             return ['ok' => false, 'message' => 'তথ্য সীমা অতিক্রম করেছে।'];
