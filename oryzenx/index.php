@@ -5,11 +5,29 @@
  */
 declare(strict_types=1);
 
+/* Fail loudly and clearly on ancient PHP instead of showing a blank page */
+if (PHP_VERSION_ID < 80000) {
+    header('Content-Type: text/html; charset=utf-8');
+    exit('<p style="font-family:sans-serif;padding:40px;line-height:1.7">This site needs <b>PHP 8.0 or newer</b>. '
+       . 'Your server runs <b>' . PHP_VERSION . '</b>.<br>Fix: hPanel → Advanced → PHP Configuration → select PHP 8.1/8.2.</p>');
+}
+
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/contact.php';
 
+if (cfg('debug')) {
+    ini_set('display_errors', '1');
+    error_reporting(E_ALL);
+}
+
 $path = current_path();
+
+/* ---------- Diagnostics ---------- */
+if ($path === 'health' && cfg('health', true) && is_file(__DIR__ . '/includes/health.php')) {
+    require_once __DIR__ . '/includes/health.php';
+    health_page();
+}
 
 /* ---------- API ---------- */
 if ($path === 'api/contact') {

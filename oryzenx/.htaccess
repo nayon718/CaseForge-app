@@ -4,16 +4,17 @@ DirectoryIndex index.php
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteBase /
 
-  # Force no trailing slash (except root)
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^(.+)/$ /$1 [R=301,L]
+  # Works in the web root AND in a subfolder (no hardcoded RewriteBase)
 
-  # Serve existing files/dirs directly
+  # Serve existing files/folders as-is (assets, images, etc.)
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
+
+  # Strip trailing slash on virtual URLs only
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.+?)/+$ /$1 [R=301,L]
 
   # Everything else -> front controller
   RewriteRule ^ index.php [QSA,L]
@@ -21,7 +22,13 @@ DirectoryIndex index.php
 
 # Protect sensitive files
 <FilesMatch "^(config\.php|site\.json|composer\.(json|lock))$">
-  Require all denied
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
 </FilesMatch>
 
 <IfModule mod_deflate.c>

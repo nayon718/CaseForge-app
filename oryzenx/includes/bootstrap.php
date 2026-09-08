@@ -18,7 +18,16 @@ if (file_exists(ORY_ROOT . '/config.php')) {
 $GLOBALS['ORY_CONFIG'] = $config;
 
 /* Site content data */
-$GLOBALS['ORY_SITE'] = json_decode((string)file_get_contents(ORY_ROOT . '/site.json'), true) ?: [];
+$siteFile = ORY_ROOT . '/site.json';
+if (!is_file($siteFile)) {
+    header('Content-Type: text/html; charset=utf-8');
+    exit('<p style="font-family:sans-serif;padding:40px">Missing <code>site.json</code>. Upload it next to <code>index.php</code>.</p>');
+}
+$GLOBALS['ORY_SITE'] = json_decode((string)file_get_contents($siteFile), true);
+if (!is_array($GLOBALS['ORY_SITE'])) {
+    header('Content-Type: text/html; charset=utf-8');
+    exit('<p style="font-family:sans-serif;padding:40px">Could not read <code>site.json</code>: ' . htmlspecialchars(json_last_error_msg()) . '</p>');
+}
 
 function cfg(string $key, $default = null) {
     return $GLOBALS['ORY_CONFIG'][$key] ?? $default;

@@ -14,7 +14,7 @@ function db(): ?PDO
     if (empty($c['name'])) return null;
 
     $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
-        $c['host'] ?? '127.0.0.1', $c['port'] ?? '3306', $c['name']);
+        $c['host'] ?? 'localhost', $c['port'] ?? '3306', $c['name']);
     try {
         $pdo = new PDO($dsn, $c['user'] ?? 'root', $c['pass'] ?? '', [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
