@@ -80,6 +80,18 @@ node tools/preview-server.mjs   # http://localhost:3000
 
 Production always runs `index.php`.
 
+## Troubleshooting
+
+**Getting a 500 Internal Server Error?**
+
+1. Open `https://yourdomain.com/check.php` — a standalone diagnostic that works even when the site is down.
+2. If that also 500s, rename `.htaccess` to `htaccess.txt` and reload. If the site then works, your host rejects a directive — the shipped `.htaccess` already avoids `Options +FollowSymLinks`, the usual culprit on shared hosting.
+3. Set PHP to 8.1 or 8.2 in hPanel → Advanced → PHP Configuration.
+4. `.htaccess` is a **hidden file** — enable "show hidden files" in File Manager to confirm it uploaded.
+5. All files must sit **directly inside `public_html`**, not in a subfolder.
+
+Delete `check.php` and `includes/health.php` once the site is live.
+
 ## Structure
 
 ```
