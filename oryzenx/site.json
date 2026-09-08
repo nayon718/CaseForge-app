@@ -1,0 +1,23 @@
+{
+  "brand": "Oryzenx",
+  "name": "AH NAYON",
+  "nameFull": "A.H NAYON",
+  "logo": "AH NAYON BIO",
+  "tagline": "Mechanical Engineering Student | Tech Enthusiast",
+  "roles": ["Mechanical Engineer", "Cybersecurity", "Web Developer", "Programmer", "UI/UX Designer"],
+  "email": "mdnayon718@gmail.com",
+  "phone": "01757827996",
+  "phoneIntl": "+8801757827996",
+  "whatsapp": "8801757827996",
+  "whatsappText": "আসসালামু আলাইকুম। আমি ওয়েবসাইট বানাইতে চাই।",
+  "location": "Sundarganj, Gaibandha, Bangladesh",
+  "mapLat": 25.3419,
+  "mapLng": 89.5085,
+  "cv": "assets/AH-NAYON-CV.pdf",
+  "social": {
+    "facebook": "https://facebook.com/",
+    "x": "https://x.com/",
+    "instagram": "https://instagram.com/",
+    "github": "https://github.com/nayon718"
+  }
+}

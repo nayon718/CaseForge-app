@@ -1,0 +1,84 @@
+<section class="section" id="contact">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Contact Me</span>
+      <h2 class="section-title">Let's Work <span>Together</span></h2>
+    </div>
+
+    <div class="contact-grid">
+      <div class="contact-side">
+        <a class="info glass reveal" href="mailto:{{email}}">
+          <span class="info-ico"><i class="fa-solid fa-envelope"></i></span>
+          <span><b>Mail</b><em>{{email}}</em></span>
+        </a>
+        <a class="info glass reveal" href="tel:{{phoneIntl}}">
+          <span class="info-ico green"><i class="fa-solid fa-phone"></i></span>
+          <span><b>Call</b><em>{{phone}}</em></span>
+        </a>
+        <a class="info glass reveal" href="#location">
+          <span class="info-ico orange"><i class="fa-solid fa-location-dot"></i></span>
+          <span><b>Location</b><em>Sundarganj, Gaibandha</em></span>
+        </a>
+
+        <div class="cta glass reveal">
+          <h3 class="bn">আপনার ব্যবসা বা কোম্পানির জন্য ওয়েবসাইট দরকার?</h3>
+          <p class="bn">
+            পেশাদার, আধুনিক ও দ্রুতগতির ওয়েবসাইট তৈরি করতে আজই যোগাযোগ করুন।
+            ই-কমার্স, কর্পোরেট, পোর্টফোলিও – যেকোনো ধরণের প্রজেক্টে আমরা আছি আপনার পাশে।
+          </p>
+          <div class="cta-actions">
+            <a class="btn btn-primary" href="mailto:{{email}}?subject=Website%20Project%20Inquiry"><i class="fa-solid fa-envelope"></i> Contact / Hire</a>
+            <a class="btn btn-wa" href="{{whatsappLink}}" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>
+          </div>
+        </div>
+      </div>
+
+      <form class="form glass reveal" id="contactForm" method="post" action="{{base}}api/contact" novalidate>
+        <h3>Send a message</h3>
+        <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <div class="row">
+          <label>Your Name<input type="text" name="name" required placeholder="Enter your name"></label>
+          <label>Your Email<input type="email" name="email" required placeholder="you@example.com"></label>
+        </div>
+        <div class="row">
+          <label>Phone<input type="text" name="phone" placeholder="01XXXXXXXXX"></label>
+          <label>Subject<input type="text" name="subject" placeholder="Project type"></label>
+        </div>
+        <label>Message<textarea name="message" rows="5" required placeholder="Tell me about your project..."></textarea></label>
+        <button class="btn btn-primary btn-block" type="submit"><i class="fa-solid fa-paper-plane"></i> Send Message</button>
+        <p class="form-note" id="formNote" role="status"></p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="location">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Find me</span>
+      <h2 class="section-title">My <span>Location</span></h2>
+      <p class="section-sub">Based in Sundarganj, Gaibandha — heart of Bangladesh</p>
+    </div>
+
+    <div class="map-wrap glass reveal">
+      <div class="map-bar">
+        <div class="map-place">
+          <i class="fa-solid fa-location-dot"></i>
+          <div><b>Sundarganj, Gaibandha</b><span>Rangpur Division, Bangladesh · 25.3419° N, 89.5085° E</span></div>
+        </div>
+        <div class="map-tools">
+          <button type="button" class="mt" data-map="street" aria-pressed="true"><i class="fa-solid fa-map"></i> Street</button>
+          <button type="button" class="mt" data-map="satellite"><i class="fa-solid fa-satellite"></i> Satellite</button>
+          <button type="button" class="mt" data-map="terrain"><i class="fa-solid fa-mountain-sun"></i> Terrain</button>
+          <button type="button" class="mt" id="mapLocate" title="Recenter"><i class="fa-solid fa-crosshairs"></i></button>
+          <button type="button" class="mt" id="mapFull" title="Fullscreen"><i class="fa-solid fa-expand"></i></button>
+          <a class="btn btn-primary btn-sm" id="mapDirections" target="_blank" rel="noopener"
+             href="https://www.google.com/maps/dir/?api=1&destination=25.3419,89.5085">
+            <i class="fa-solid fa-diamond-turn-right"></i> Get Directions
+          </a>
+        </div>
+      </div>
+      <div id="map" class="map"></div>
+    </div>
+  </div>
+</section>
