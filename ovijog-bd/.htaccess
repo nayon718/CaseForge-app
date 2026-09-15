@@ -1,19 +1,34 @@
 Options -Indexes
 RewriteEngine On
 
-# কনফিগ ও সেনসিটিভ ফোল্ডার সরাসরি অ্যাক্সেস বন্ধ
+# Block sensitive
 RewriteRule ^config\.php$ - [F,L]
 RewriteRule ^config\.sample\.php$ - [F,L]
 RewriteRule ^(includes|database|logs)(/|$) - [F,L]
 
-# ক্লিন URL — সব রিকোয়েস্ট index.php-এ
+# Clean URL — all to index.php
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ index.php [QSA,L]
 
-# সিকিউরিটি হেডার (সাপোর্ট থাকলে)
+# Security headers
 <IfModule mod_headers.c>
 Header set X-Content-Type-Options "nosniff"
 Header set X-Frame-Options "SAMEORIGIN"
 Header set Referrer-Policy "strict-origin-when-cross-origin"
+Header set X-XSS-Protection "1; mode=block"
+# Cache static assets 30 days (images)
+<FilesMatch "\.(jpg|jpeg|png|gif|webp|svg|ico|css|js)$">
+Header set Cache-Control "public, max-age=2592000, immutable"
+</FilesMatch>
+</IfModule>
+
+# Compression
+<IfModule mod_deflate.c>
+AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Prevent directory listing
+<IfModule mod_autoindex.c>
+IndexIgnore *
 </IfModule>

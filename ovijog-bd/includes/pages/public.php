@@ -1,423 +1,278 @@
 <?php
 /**
- * পাবলিক পেজ রেন্ডারার
+ * চাকরি সার্কুলার — পাবলিক পেজ রেন্ডারার
  */
 
-if (!function_exists('categories_list')) {
-    function categories_list(): array
-    {
-        return db_all('SELECT * FROM categories WHERE status = 1 ORDER BY sort_order ASC, id ASC');
+if (!function_exists('get_categories')) {
+    function get_categories(): array { return db_all('SELECT * FROM categories WHERE status=1 ORDER BY sort_order ASC, id ASC'); }
+}
+if (!function_exists('get_banners')) {
+    function get_banners(): array { return db_all('SELECT * FROM banners WHERE status=1 ORDER BY sort_order ASC, id DESC LIMIT 10'); }
+}
+if (!function_exists('get_jobs')) {
+    function get_jobs(int $limit, int $offset, string $where='status="published"', array $params=[], string $order='created_at DESC, id DESC'): array {
+        $sql="SELECT j.*, c.name AS category_name, c.color AS category_color, c.icon AS category_icon FROM jobs j LEFT JOIN categories c ON c.id=j.category_id WHERE $where ORDER BY $order LIMIT $limit OFFSET $offset";
+        return db_all($sql,$params);
     }
 }
-
-if (!function_exists('districts_list')) {
-    function districts_list(): array
-    {
-        return db_all('SELECT * FROM districts ORDER BY name_bn ASC');
-    }
-}
-
-if (!function_exists('get_approved_reports')) {
-    function get_approved_reports(int $limit, int $offset): array
-    {
-        return db_all(
-            'SELECT r.*, c.name AS category_name, c.color AS category_color, c.icon AS category_icon
-             FROM reports r
-             LEFT JOIN categories c ON c.id = r.category_id
-             WHERE r.status = "approved"
-             ORDER BY r.created_at DESC, r.id DESC
-             LIMIT ' . (int)$limit . ' OFFSET ' . (int)$offset
-        );
-    }
-}
-
-if (!function_exists('package_report')) {
-    function package_report(array $r): array
-    {
-        $r['district_name'] = $r['district_name'] !== '' ? $r['district_name'] : ($r['district'] ?: 'বাংলাদেশ');
-        return $r;
+if (!function_exists('count_jobs')) {
+    function count_jobs(string $where='status="published"', array $params=[]): int {
+        return (int)db_value("SELECT COUNT(*) FROM jobs WHERE $where",$params,0);
     }
 }
 
 if (!function_exists('page_home')) {
-    function page_home(): string
-    {
-        $perPage = max(6, (int) setting('items_per_page', '20'));
-        $current = max(1, (int) ($_GET['page'] ?? 1));
-        $total = db_count('reports', 'status = "approved"');
-        $pg = paginate($total, $perPage, $current);
-        $reports = array_map('package_report', get_approved_reports($perPage, $pg['offset']));
+    function page_home(): string {
+        $perPage=max(10,(int)setting('items_per_page','20'));
+        $current=max(1,(int)($_GET['page']??1));
+        $total=count_jobs();
+        $pg=paginate($total,$perPage,$current);
+        $jobs=get_jobs($perPage,$pg['offset']);
 
-        $totalMoney = (float) db_value('SELECT COALESCE(SUM(amount),0) FROM reports WHERE status = "approved"', [], 0);
-        $topCategory = db_fetch(
-            'SELECT c.name, COUNT(r.id) AS total, COALESCE(SUM(r.amount),0) AS money
-             FROM reports r JOIN categories c ON c.id=r.category_id
-             WHERE r.status="approved"
-             GROUP BY c.id ORDER BY total DESC, money DESC LIMIT 1'
-        );
-
-        $html = '<section class="hero-page">
-            <div class="hero-badge"><i class="fa-solid fa-shield-halved"></i> অনুমোদিত রিপোর্টসমূহ</div>
-            <h1 class="hero-title">নাগরিকদের জন্য উন্মুক্ত ও যাচাইকৃত রিপোর্টসমূহ</h1>
-            <p class="hero-sub">বাংলাদেশ নাগরিক প্ল্যাটফর্মে জমা হওয়া প্রতিষ্ঠিত রিপোর্ট। তথ্য যাচাই করা হয় এবং গোপনীয়তা বজায় রাখা হয়।</p>
-            <div class="hero-stats">
-                <div class="stat-box"><span class="stat-icon"><i class="fa-solid fa-file-lines"></i></span><div><div class="stat-value">' . bn_number($total) . '</div><div class="stat-label">মোট রিপোর্ট</div></div></div>
-                <div class="stat-box"><span class="stat-icon money"><i class="fa-solid fa-coins"></i></span><div><div class="stat-value">' . e(format_money($totalMoney)) . '</div><div class="stat-label">মোট টাকা</div></div></div>
-                <div class="stat-box"><span class="stat-icon category"><i class="fa-solid fa-chart-line"></i></span><div><div class="stat-value">' . e($topCategory['name'] ?? '—') . '</div><div class="stat-label">টপ বিভাগ রিপোর্ট</div></div></div>
-            </div>
-        </section>';
-
-        $html .= '<section class="section-block" id="approved-reports">
-            <div class="section-head"><div><h2 class="section-title"><i class="fa-solid fa-file-circle-check"></i> অনুমোদিত রিপোর্টসমূহ</h2><p class="section-desc">ধারাবাহিকভাবে প্রকাশিত যাচাইকৃত রিপোর্ট</p></div></div>';
-
-        if (!$reports) {
-            $html .= '<div class="empty-state"><i class="fa-regular fa-folder-open"></i><h3>এখনো কোনো রিপোর্ট যাচাই হয়নি</h3><p>প্রথম রিপোর্ট জমা দিন এবং অ্যাডমিন যাচাই করলে এখানে দেখা যাবে।</p><a href="' . e(url('report')) . '" data-link class="btn btn-primary"><i class="fa-solid fa-plus"></i> রিপোর্ট জমা দিন</a></div>';
-        } else {
-            $html .= '<div class="reports-list">' . implode('', array_map(function ($r) {
-                return report_card_html($r, [
-                    'name' => $r['category_name'] ?? '', 'color' => $r['category_color'] ?? '', 'icon' => $r['category_icon'] ?? '',
-                ]);
-            }, $reports)) . '</div>';
-            $html .= paginate_links($pg['pages'], $pg['current'], '');
+        $banners=get_banners();
+        $bannerHtml='';
+        if($banners){
+            $bannerHtml.='<section class="banner-section"><div class="banner-track" id="bannerTrack">';
+            foreach($banners as $b){
+                $img=uploads_url($b['image']);
+                $link=$b['link']?e($b['link']):'#';
+                $bannerHtml.='<div class="banner-card"><img src="'.e($img).'" alt="'.e($b['title']).'" loading="lazy">'.($b['link']?'<a href="'.e($b['link']).'" target="_blank" rel="noopener"></a>':'').'</div>';
+            }
+            $bannerHtml.='</div><div class="banner-dots" id="bannerDots"></div>';
+            if(count($banners)>1){
+                $bannerHtml.='<button class="banner-nav banner-prev" id="bannerPrev"><i class="fa-solid fa-chevron-left"></i></button><button class="banner-nav banner-next" id="bannerNext"><i class="fa-solid fa-chevron-right"></i></button>';
+            }
+            $bannerHtml.='</section>';
         }
-        $html .= '</section>';
+
+        $h1=setting('home_seo_h1','চাকরি সার্কুলার ও আজকের চাকরির খবর');
+        $html='<h1 class="section-title" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;">'.e($h1).'</h1>';
+        $html.=$bannerHtml;
+
+        $html.='<section class="section-block"><div class="section-head"><div><h2 class="section-title"><i class="fa-solid fa-briefcase"></i> সর্বশেষ চাকরি</h2><p class="section-desc">মোট '.bn_number($total).' টি চাকরি • '.bn_number($pg['pages']).' টি পৃষ্ঠা</p></div><a href="'.e(url('jobs')).'" data-link class="btn btn-soft btn-sm">সব দেখুন <i class="fa-solid fa-arrow-right"></i></a></div>';
+        if(!$jobs){
+            $html.='<div class="empty-state"><i class="fa-regular fa-folder-open"></i><h3>এখনো কোনো চাকরি প্রকাশিত হয়নি</h3><p>অ্যাডমিন প্যানেল থেকে প্রথম চাকরি যোগ করুন।</p></div>';
+        } else {
+            $html.='<div class="job-list">'.implode('',array_map(function($j){ return job_card_html($j,['name'=>$j['category_name']??'','color'=>$j['category_color']??'#0f766e','icon'=>$j['category_icon']??'fa-solid fa-briefcase']); },$jobs)).'</div>';
+            $html.=paginate_links($pg['pages'],$pg['current'],'');
+        }
+        $html.='</section>';
+
+        // Schema for homepage
+        $html.=breadcrumb_schema([['name'=>'হোম','url'=>site_url().'/']]);
 
         return $html;
     }
 }
 
-if (!function_exists('page_reports')) {
-    function page_reports(): string
-    {
-        return page_home();
+if (!function_exists('page_category')) {
+    function page_category(string $slug): string {
+        $cat=db_fetch('SELECT * FROM categories WHERE slug=? LIMIT 1',[$slug]);
+        if(!$cat) return page_404();
+        $perPage=max(10,(int)setting('items_per_page','20'));
+        $current=max(1,(int)($_GET['page']??1));
+        $total=count_jobs('status="published" AND category_id=?',[$cat['id']]);
+        $pg=paginate($total,$perPage,$current);
+        $jobs=get_jobs($perPage,$pg['offset'],'status="published" AND category_id=?',[$cat['id']]);
+
+        $html='<section class="section-block"><div class="section-head"><div><h2 class="section-title"><i class="'.e($cat['icon']).'"></i> '.e($cat['name']).' সমূহ</h2><p class="section-desc">মোট '.bn_number($total).' টি • '.bn_number($pg['pages']).' পৃষ্ঠা</p></div></div>';
+        if(!$jobs) $html.='<div class="empty-state"><i class="fa-solid fa-briefcase"></i><h3>এই ক্যাটাগরিতে কোনো চাকরি নেই</h3></div>';
+        else {
+            $html.='<div class="job-list">'.implode('',array_map(fn($j)=>job_card_html($j,$cat),$jobs)).'</div>';
+            $html.=paginate_links($pg['pages'],$pg['current'],'category/'.$cat['slug']);
+        }
+        $html.='</section>';
+        $html.=breadcrumb_schema([['name'=>'হোম','url'=>site_url().'/'],['name'=>$cat['name'],'url'=>site_url().'/category/'.$cat['slug']]]);
+        return $html;
     }
 }
 
-if (!function_exists('page_report')) {
-    function page_report(): string
-    {
-        $cats = categories_list();
-        $districts = districts_list();
-        $catOptions = '<option value="">বিভাগ সিলেক্ট করুন</option>';
-        foreach ($cats as $c) {
-            $catOptions .= '<option value="' . $c['id'] . '">' . e($c['name']) . '</option>';
+if (!function_exists('page_jobs')) {
+    function page_jobs(): string {
+        $perPage=max(10,(int)setting('items_per_page','20'));
+        $current=max(1,(int)($_GET['page']??1));
+        $total=count_jobs();
+        $pg=paginate($total,$perPage,$current);
+        $jobs=get_jobs($perPage,$pg['offset']);
+        $html='<section class="section-block"><div class="section-head"><div><h2 class="section-title"><i class="fa-solid fa-list"></i> সকল চাকরি</h2><p class="section-desc">মোট '.bn_number($total).' টি</p></div></div>';
+        $html.='<div class="job-list">'.implode('',array_map(fn($j)=>job_card_html($j), $jobs)).'</div>';
+        $html.=paginate_links($pg['pages'],$pg['current'],'jobs');
+        $html.='</section>';
+        return $html;
+    }
+}
+
+if (!function_exists('page_job_detail')) {
+    function page_job_detail(string $slug): string {
+        $job=db_fetch('SELECT j.*, c.name AS category_name, c.color AS category_color, c.icon AS category_icon, c.slug AS category_slug FROM jobs j LEFT JOIN categories c ON c.id=j.category_id WHERE j.slug=? LIMIT 1',[$slug]);
+        if(!$job || $job['status']!=='published') return page_404();
+        track_job_view((int)$job['id']);
+
+        $cat=['name'=>$job['category_name']??'চাকরি','color'=>$job['category_color']??'#0f766e','icon'=>$job['category_icon']??'fa-solid fa-briefcase','slug'=>$job['category_slug']??'chakri'];
+        $imgs=get_job_images($job);
+        $deadlineInfo=deadline_countdown($job['deadline']??'');
+        $related=get_jobs(6,0,'status="published" AND category_id=? AND id!=?',[$job['category_id'],$job['id']],'views DESC, created_at DESC');
+
+        $extraLinks=[];
+        if(!empty($job['extra_links'])){ $decoded=json_decode($job['extra_links'],true); if(is_array($decoded)) $extraLinks=$decoded; }
+
+        $html='<section class="job-detail">';
+        $html.='<div class="detail-head"><a href="'.e(url('category/'.$cat['slug'])).'" data-link class="btn btn-ghost btn-sm"><i class="fa-solid fa-arrow-left"></i> '.e($cat['name']).'</a>';
+        $html.='<h1 class="detail-title">'.e($job['title']).'</h1>';
+        $html.='<div class="detail-meta"><span><i class="fa-regular fa-clock"></i> '.e(time_ago($job['created_at'])).' • '.e(format_date_bn($job['created_at'])).'</span><span><i class="fa-solid fa-location-dot"></i> '.e($job['district']?:$job['location_text']?:'বাংলাদেশ').'</span><span class="'.($deadlineInfo['expired']?'expired':'').'"><i class="fa-solid fa-hourglass-half"></i> '.e($deadlineInfo['text']).'</span>'.($job['deadline']?'<span><i class="fa-regular fa-calendar"></i> শেষ: '.e(format_date_bn($job['deadline'])).'</span>':'').'</div></div>';
+
+        // Gallery
+        if($imgs){
+            $html.='<div class="detail-gallery"><div class="detail-gallery-main" id="detailMainImg"><img src="'.e(uploads_url($imgs[0])).'" alt="'.e($job['title']).'" id="detailMain"></div>';
+            if(count($imgs)>1){
+                $html.='<div class="detail-thumbs" id="detailThumbs">';
+                foreach($imgs as $i=>$im){ $html.='<img src="'.e(uploads_url($im)).'" data-full="'.e(uploads_url($im)).'" class="'.($i===0?'active':'').'" loading="lazy" alt="ছবি '.bn_number($i+1).'">'; }
+                $html.='</div>';
+            }
+            $html.='</div>';
         }
-        $distOptions = '<option value="">জেলা সিলেক্ট করুন</option>';
-        foreach ($districts as $d) {
-            $distOptions .= '<option value="' . e($d['name_bn']) . '">' . e($d['name_bn']) . '</option>';
-        }
-        $crimeOptions = '';
-        foreach ($cats as $c) {
-            $crimeOptions .= '<option value="' . e($c['name']) . '">' . e($c['name']) . '</option>';
+
+        // PDF
+        if(!empty($job['pdf_file'])){
+            $html.='<div class="card" style="margin:16px 0;display:flex;align-items:center;justify-content:space-between;gap:12px"><div><i class="fa-solid fa-file-pdf" style="color:var(--danger)"></i> <strong>PDF ডাউনলোড করুন</strong><div style="font-size:12px;color:var(--muted)">আবেদন ফরম ও বিস্তারিত</div></div><a href="'.e(uploads_url($job['pdf_file'])).'" target="_blank" class="btn btn-danger btn-sm"><i class="fa-solid fa-download"></i> ডাউনলোড</a></div>';
         }
 
-        $privacyText = setting('privacy_approved_text', 'আমি নিশ্চিত করছি যে দেওয়া তথ্য সঠিক এবং মিথ্যা তথ্য দেওয়ার জন্য আমি আইনগতভাবে দায়ী থাকব। বাংলাদেশ নাগরিক গোপনীয়তা নীতি পড়েছি এবং তা মেনে চলতে সম্মত আছি।');
+        // Description
+        $html.='<div class="detail-content">'.$job['description'].'</div>';
 
-        return '<section class="form-page">
-            <div class="form-hero">
-                <div class="form-badge"><i class="fa-solid fa-shield-halved"></i> ১০০% গোপনীয়তা</div>
-                <h1 class="form-title">অভিযোগ জমা দিন</h1>
-                <p class="form-sub">আপনার দেওয়া তথ্য সম্পূর্ণ গোপন রাখা হবে, নিশ্চিতভাবে রিপোর্ট করুন। প্রমাণ সহকারে তথ্য প্রদান করলে দ্রুত ব্যবস্থা নেওয়া সম্ভব।</p>
-            </div>
-            <form id="reportForm" class="report-form card" data-ajax-form data-url="' . e(url('api/report-submit')) . '" data-prevent-default>
-                ' . csrf_field() . '
-                <div class="form-hidden"><input type="text" name="website_field" value="" tabindex="-1" autocomplete="off"></div>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="category_id"><i class="fa-solid fa-layer-group"></i> বিভাগ সিলেক্ট করুন <span class="req">*</span></label>
-                        <select id="category_id" name="category_id" required><option value="">বিভাগ সিলেক্ট করুন</option>' . $catOptions . '</select>
-                    </div>
-                    <div class="form-group">
-                        <label for="name"><i class="fa-solid fa-user"></i> অভিযুক্তের নাম <span class="req">*</span></label>
-                        <input id="name" name="name" type="text" maxlength="150" placeholder="অভিযুক্তের পুরো নাম লিখুন" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="crime_type"><i class="fa-solid fa-triangle-exclamation"></i> অপরাধের ধরন <span class="req">*</span></label>
-                        <select id="crime_type" name="crime_type" required><option value="">অপরাধের ধরন সিলেক্ট করুন</option>' . $crimeOptions . '</select>
-                    </div>
-                    <div class="form-group">
-                        <label for="district_name"><i class="fa-solid fa-location-dot"></i> জেলা <span class="req">*</span></label>
-                        <select id="district_name" name="district_name" required><option value="">জেলা সিলেক্ট করুন</option>' . $distOptions . '</select>
-                    </div>
-                </div>
+        // Extra links
+        if($extraLinks){
+            $html.='<div class="detail-links">';
+            foreach($extraLinks as $lnk){
+                $label=$lnk['label']??'লিংক খুলুন'; $urlL=$lnk['url']??'#';
+                $html.='<a href="'.e($urlL).'" target="_blank" rel="noopener" class="detail-link-card"><span><i class="fa-solid fa-link"></i> '.e($label).'</span><span class="btn btn-soft btn-sm">Open <i class="fa-solid fa-arrow-up-right-from-square"></i></span></a>';
+            }
+            $html.='</div>';
+        }
 
-                <div class="form-group">
-                    <label for="address"><i class="fa-solid fa-map-location-dot"></i> ঠিকানা: <small>সম্পূর্ণ ঠিকানা — বাড়ি, রোড, গ্রাম, মহল্লা, থানা ইত্যাদি</small></label>
-                    <textarea id="address" name="address" rows="2" maxlength="500" placeholder="সম্পূর্ণ ঠিকানা লিখুন..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="mobile"><i class="fa-solid fa-phone"></i> মোবাইল নম্বর (যদি থাকে): <small>উক্ত ব্যক্তির</small></label>
-                    <input id="mobile" name="mobile" type="tel" maxlength="11" placeholder="01XXXXXXXXX">
-                </div>
-                <div class="form-group">
-                    <label for="details"><i class="fa-solid fa-file-lines"></i> বিস্তারিত বিবরণ <span class="req">*</span></label>
-                    <textarea id="details" name="details" rows="6" maxlength="6000" placeholder="যত বেশি বিস্তারিত লিখবেন, তত দ্রুত ব্যবস্থা নেওয়া সম্ভব হবে" required></textarea>
-                    <small class="hint">* যত বেশি বিস্তারিত লিখবেন, তত দ্রুত ব্যবস্থা নেওয়া সম্ভব হবে</small>
-                </div>
-                <div class="form-grid two">
-                    <div class="form-group">
-                        <label for="amount"><i class="fa-solid fa-money-bill-wave"></i> টাকা নিয়ে থাকলে তার পরিমাণ <small>(ঐচ্ছিক)</small></label>
-                        <input id="amount" name="amount" type="number" min="0" step="0.01" placeholder="00">
-                    </div>
-                    <div class="form-group">
-                        <label for="evidence_link"><i class="fa-solid fa-link"></i> তথ্য বা প্রমাণ লিংক থাকলে <small>(ঐচ্ছিক)</small></label>
-                        <input id="evidence_link" name="evidence_link" type="url" placeholder="https://example.com/evidence">
-                    </div>
-                </div>
+        // Apply button
+        if(!empty($job['application_link'])){
+            $btnText=$job['apply_button_text']?:'আবেদন করুন';
+            $html.='<a href="'.e($job['application_link']).'" target="_blank" rel="noopener" class="apply-btn"><i class="fa-solid fa-paper-plane"></i> '.e($btnText).'</a>';
+        }
 
-                <div class="form-group">
-                    <label><i class="fa-solid fa-images"></i> ছবি আপলোড <small>(ঐচ্ছিক)</small></label>
-                    <div class="upload-zone" id="reportUploadZone">
-                        <input type="file" id="reportPhotos" name="report_photos[]" accept="image/*" multiple>
-                        <div class="upload-empty"><i class="fa-solid fa-cloud-arrow-up"></i><p>ছবি নির্বাচন করুন — ১ থেকে ৫টি ছবি</p><small>সর্বোচ্চ ৫MB, অটো-কম্প্রেস হয়ে যাবে</small></div>
-                        <div class="upload-preview" id="reportPreview"></div>
-                    </div>
-                </div>
+        // Share
+        $jobUrl=site_url().'/job/'.$job['slug'];
+        $html.='<div class="card" style="margin-top:18px"><div style="display:flex;justify-content:space-between;align-items:center"><strong><i class="fa-solid fa-share-nodes"></i> শেয়ার করুন</strong><button class="share-btn" data-share data-url="'.e($jobUrl).'" data-title="'.e($job['title']).'"><i class="fa-solid fa-share"></i></button></div>'.render_share_popup($jobUrl,$job['title']).'</div>';
 
-                <div class="declaration-box">
-                    <label class="check-line">
-                        <input type="checkbox" id="declaration" name="declaration" value="1" required>
-                        <span class="checkmark"></span>
-                        <span>আমি নিশ্চিত করছি যে দেওয়া তথ্য সঠিক এবং মিথ্যা তথ্য দেওয়ার জন্য আমি আইনগতভাবে দায়ী থাকব। <a href="' . e(url('privacy')) . '" data-link>বাংলাদেশ নাগরিক গোপনীয়তা নীতি</a> পড়েছি এবং তা মেনে চলতে সম্মত আছি।</span>
-                    </label>
-                </div>
+        // Related
+        if($related){
+            $html.='<div class="related-section"><h3 class="section-title"><i class="fa-solid fa-link"></i> সম্পর্কিত পোস্ট সমূহ</h3><div class="related-grid">'.implode('',array_map(fn($r)=>job_card_html($r,$cat),$related)).'</div></div>';
+        }
 
-                <div class="form-action-buttons">
-                    <button type="submit" class="btn btn-primary btn-lg" id="submitReportBtn"><i class="fa-solid fa-paper-plane"></i> জমা দিন</button>
-                    <button type="button" class="btn btn-ghost" data-idle-reset-form><i class="fa-solid fa-rotate-left"></i> রিসেট করুন</button>
-                    <a href="' . e(url('')) . '" data-link class="btn btn-soft"><i class="fa-solid fa-house"></i> হোম এ ফিরে যান</a>
-                </div>
-            </form>
-        </section>';
+        $html.='</section>';
+        $html.=jobposting_schema($job,$cat);
+        $html.=breadcrumb_schema([['name'=>'হোম','url'=>site_url().'/'],['name'=>$cat['name'],'url'=>site_url().'/category/'.$cat['slug']],['name'=>$job['title'],'url'=>$jobUrl]]);
+
+        return $html;
     }
 }
 
 if (!function_exists('page_search')) {
-    function page_search(): string
-    {
-        $cats = categories_list();
-        $districts = districts_list();
-        $catOptions = '<option value="">সব বিভাগ</option>';
-        foreach ($cats as $c) $catOptions .= '<option value="' . e($c['name']) . '">' . e($c['name']) . '</option>';
-        $distOptions = '<option value="">সব জেলা</option>';
-        foreach ($districts as $d) $distOptions .= '<option value="' . e($d['name_bn']) . '">' . e($d['name_bn']) . '</option>';
+    function page_search(): string {
+        $q=trim($_GET['q']??'');
+        $catId=(int)($_GET['cat']??0);
+        $district=trim($_GET['district']??'');
+        $html='<section class="search-page"><div class="search-hero"><h1 class="section-title" style="justify-content:center;font-size:26px"><i class="fa-solid fa-magnifying-glass"></i> খুজুন</h1><p class="section-desc" style="text-align:center">কিওয়ার্ড, ক্যাটাগরি, জেলা দিয়ে ফিল্টার করুন</p></div>';
+        $html.='<div class="search-box"><form method="get" action="'.e(url('search')).'" data-link-form><div class="search-input-wrap"><i class="fa-solid fa-magnifying-glass"></i><input type="text" name="q" value="'.e($q).'" placeholder="চাকরির নাম, প্রতিষ্ঠান, কিওয়ার্ড লিখুন..." id="searchInput"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px"><select name="cat"><option value="0">সব ক্যাটাগরি</option>';
+        foreach(get_categories() as $c){ $html.='<option value="'.$c['id'].'"'.($catId==$c['id']?' selected':'').'>'.e($c['name']).'</option>'; }
+        $html.='</select><select name="district"><option value="">সব জেলা</option>';
+        try{ foreach(db_all('SELECT name_bn FROM districts WHERE type="district" ORDER BY name_bn ASC') as $d){ $html.='<option value="'.e($d['name_bn']).'"'.($district===$d['name_bn']?' selected':'').'>'.e($d['name_bn']).'</option>'; } }catch(Throwable $e){}
+        $html.='</select></div><button class="btn btn-primary" style="width:100%;margin-top:12px"><i class="fa-solid fa-search"></i> খুঁজুন</button></form>';
 
-        return '<section class="search-page">
-            <div class="search-hero">
-                <h1 class="form-title"><i class="fa-solid fa-magnifying-glass"></i> রিপোর্ট খুঁজুন</h1>
-                <p class="form-sub">কোনো ব্যক্তির নামে রিপোর্ট, রিপোর্ট আইডি বা জেলা/অপরাধের ধরন দিয়ে খোঁজ করুন। উপরের যেকোনো একটি ফিল্ড ব্যবহার করলেই ফলাফল পাবেন।</p>
-                <div class="search-options"><span class="chip"><i class="fa-solid fa-id-card"></i> রিপোর্ট আইডি: RPT-2026-0123</span><span class="chip"><i class="fa-solid fa-user"></i> নাম অনুযায়ী</span><span class="chip"><i class="fa-solid fa-map"></i> জেলা</span><span class="chip"><i class="fa-solid fa-triangle-exclamation"></i> অপরাধের ধরন</span></div>
-            </div>
+        // Top search
+        try{
+            $top=db_all('SELECT keyword, count FROM search_logs ORDER BY count DESC LIMIT 8');
+            if($top){ $html.='<div class="top-search"><h3><i class="fa-solid fa-fire"></i> টপ সার্চ</h3><div class="filter-chips">'; foreach($top as $t){ $html.='<a href="'.e(url('search?q='.urlencode($t['keyword']))).'" data-link class="chip">'.e($t['keyword']).' ('.bn_number($t['count']).')</a>'; } $html.='</div></div>'; }
+        }catch(Throwable $e){}
 
-            <div class="search-box card">
-                <form id="searchForm" action="' . e(url('api/search')) . '" data-prevent-default>
-                    ' . csrf_field() . '
-                    <div class="form-grid two trow">
-                        <div class="form-group">
-                            <label for="searchId">রিপোর্ট আইডি দিয়ে খুঁজুন</label>
-                            <input id="searchId" name="report_no" type="text" placeholder="RPT-2026-0123">
-                        </div>
-                        <div class="form-group">
-                            <label for="searchName">নাম দ্বারা খুঁজুন</label>
-                            <input id="searchName" name="name" type="text" placeholder="নাম লিখুন">
-                        </div>
-                    </div>
-                    <div class="form-grid two trow">
-                        <div class="form-group">
-                            <label for="searchDistrict">জেলা সিলেক্ট করে খুঁজুন</label>
-                            <select id="searchDistrict" name="district_name">' . $distOptions . '</select>
-                        </div>
-                        <div class="form-group">
-                            <label for="searchCrime">অপরাধের ধরন</label>
-                            <select id="searchCrime" name="crime_type">' . $catOptions . '</select>
-                        </div>
-                    </div>
-                    <div class="search-actions">
-                        <button type="submit" class="btn btn-primary btn-lg"><i class="fa-solid fa-magnifying-glass-location"></i> তথ্য খুঁজুন</button>
-                        <button type="button" class="btn btn-ghost" data-search-reset><i class="fa-solid fa-broom"></i> রিসেট</button>
-                    </div>
-                </form>
-            </div>
-            <div id="searchResults" class="search-results"></div>
-        </section>';
-    }
-}
+        $html.='</div>';
 
-if (!function_exists('page_leaderboard')) {
-    function page_leaderboard(): string
-    {
-        $rows = db_all(
-            'SELECT c.name AS category_name, c.color AS category_color, c.icon AS category_icon,
-                    r.name, r.report_no, r.district_name, r.created_at, r.amount, r.id
-             FROM reports r JOIN categories c ON c.id = r.category_id
-             WHERE r.status = "approved"
-             ORDER BY r.created_at DESC, r.id DESC
-             LIMIT 50'
-        );
-
-        $html = '<section class="leaderboard-page">
-            <div class="search-hero">
-                <h1 class="form-title"><i class="fa-solid fa-trophy"></i> লিডার বোর্ড</h1>
-                <p class="form-sub">টপ বিভাগ ও শীর্ষ ৫০ জনের নাম। যাদের নাম বিভাগের সাথে মিলে গেছে।</p>
-            </div>
-            <div class="leaderboard-top">
-                <div class="lb-medal first"><i class="fa-solid fa-medal"></i><span class="rank">১</span><span class="lb-name">' . e($rows[0]['name'] ?? '—') . '</span><span class="lb-cat">' . e($rows[0]['category_name'] ?? '') . '</span></div>
-                <div class="lb-medal second"><i class="fa-solid fa-medal"></i><span class="rank">২</span><span class="lb-name">' . e($rows[1]['name'] ?? '—') . '</span><span class="lb-cat">' . e($rows[1]['category_name'] ?? '') . '</span></div>
-                <div class="lb-medal third"><i class="fa-solid fa-medal"></i><span class="rank">৩</span><span class="lb-name">' . e($rows[2]['name'] ?? '—') . '</span><span class="lb-cat">' . e($rows[2]['category_name'] ?? '') . '</span></div>
-            </div>
-            <div class="leaderboard-list card">';
-        if (!$rows) {
-            $html .= '<div class="empty-state"><i class="fa-regular fa-trophy"></i><h3>এখনো লিডার বোর্ড খালি</h3></div>';
-        } else {
-            $i = 0;
-            foreach ($rows as $row) {
-                $i++;
-                $cls = $i <= 3 ? ' top-three' : '';
-                $html .= '<div class="leaderboard-row' . $cls . '">
-                    <span class="lb-index">' . bn_number($i) . '</span>
-                    <span class="lb-icon" style="background:' . e($row['category_color']) . '"><i class="' . e($row['category_icon']) . '"></i></span>
-                    <div class="lb-main"><div class="lb-user"><i class="fa-solid fa-user"></i> ' . e($row['name']) . ' <span class="lb-id">' . e($row['report_no']) . '</span></div><div class="lb-cat2">' . e($row['category_name']) . ' · ' . e($row['district_name'] ?: 'বাংলাদেশ') . '</div></div>
-                    <span class="lb-date">' . e(time_ago($row['created_at'])) . '</span>
-                    <a href="' . e(url('report/' . $row['report_no'])) . '" data-link class="lb-view"><i class="fa-solid fa-arrow-right"></i></a>
-                </div>';
-            }
+        if($q!==''||$catId||$district!==''){
+            if($q!=='') log_search($q);
+            $where='status="published"'; $params=[];
+            if($q!==''){ $where.=' AND (title LIKE ? OR description LIKE ? OR short_description LIKE ?)'; $params[]='%'.$q.'%'; $params[]='%'.$q.'%'; $params[]='%'.$q.'%'; }
+            if($catId){ $where.=' AND category_id=?'; $params[]=$catId; }
+            if($district!==''){ $where.=' AND (district LIKE ? OR location_text LIKE ?)'; $params[]='%'.$district.'%'; $params[]='%'.$district.'%'; }
+            $total=count_jobs($where,$params);
+            $perPage=max(10,(int)setting('items_per_page','20'));
+            $current=max(1,(int)($_GET['page']??1));
+            $pg=paginate($total,$perPage,$current);
+            $jobs=get_jobs($perPage,$pg['offset'],$where,$params);
+            $html.='<div class="section-block" style="margin-top:20px"><div class="section-head"><h3 class="section-title">ফলাফল: '.bn_number($total).' টি</h3></div>';
+            if(!$jobs) $html.='<div class="empty-state"><i class="fa-solid fa-magnifying-glass"></i><h3>কোনো ফলাফল পাওয়া যায়নি</h3></div>';
+            else { $html.='<div class="job-list">'.implode('',array_map(fn($j)=>job_card_html($j),$jobs)).'</div>'; $html.=paginate_links($pg['pages'],$pg['current'],'search?q='.urlencode($q).'&cat='.$catId.'&district='.urlencode($district)); }
+            $html.='</div>';
         }
-        $html .= '</div></section>';
+
+        $html.='</section>';
         return $html;
     }
 }
 
-if (!function_exists('page_donation')) {
-    function page_donation(): string
-    {
-        $methods = db_all('SELECT * FROM payment_methods WHERE status = 1 ORDER BY sort_order ASC, id ASC');
-        $cards = '';
-        foreach ($methods as $m) {
-            $logo = $m['logo'] !== '' ? uploads_url($m['logo']) : '';
-            $logoHtml = $logo !== '' ? '<img src="' . e($logo) . '" alt="' . e($m['name']) . '">' : '<i class="fa-solid fa-wallet"></i>';
-            $safeAddress = e($m['address']);
-            $cards .= '
-            <div class="pay-card" data-method-id="' . $m['id'] . '" data-address="' . $safeAddress . '" data-name="' . e($m['name']) . '">
-                <div class="pay-logo" style="--brand:' . e($m['color']) . '">' . $logoHtml . '</div>
-                <div class="pay-info"><h3>' . e($m['name']) . '</h3><div class="pay-address">' . $safeAddress . '</div></div>
-                <button type="button" class="btn btn-ghost copy-pay-btn" data-copy="' . $safeAddress . '"><i class="fa-solid fa-copy"></i> কপি</button>
-            </div>';
-        }
-        $payOptions = '<option value="">পেমেন্ট মেথড সিলেক্ট করুন</option>';
-        foreach ($methods as $m) $payOptions .= '<option value="' . $m['id'] . '">' . e($m['name']) . '</option>';
-
-        return '<section class="donation-page">
-            <div class="donation-header">
-                <div class="donation-badge"><i class="fa-solid fa-heart"></i> অনুদান</div>
-                <h1 class="form-title">আপনার সহযোগিতা আমাদের এগিয়ে নিতে সাহায্য করবে</h1>
-                <p class="form-sub">আপনার ছোট্ট একটি অনুদান আমাদের উদ্যোগকে এগিয়ে নিতে সহায়তা করে। প্রতিটি টাকা সরাসরি দেশের উন্নয়নমূলক কাজে ব্যয় হয়।</p>
-            </div>
-            <div class="donation-grid">
-                <div class="donation-reasons card">
-                    <h2><i class="fa-solid fa-circle-question"></i> কেন অনুদান দিবেন</h2>
-                    <div class="reason-item"><i class="fa-solid fa-chart-line"></i><div><strong>উন্নত সেবা</strong><p>আপনার সহযোগিতা আমাদেরকে আরও উন্নত সেবা প্রদান করতে, নতুন প্রযুক্তি যুক্ত করতে সহায়তা করে।</p></div></div>
-                    <div class="reason-item"><i class="fa-solid fa-hand-holding-heart"></i><div><strong>দেশের উন্নয়ন</strong><p>প্রতিটি টাকা সরাসরি দেশের উন্নয়নমূলক কাজে ব্যয় হয়।</p></div></div>
-                    <div class="reason-item"><i class="fa-solid fa-users"></i><div><strong>ছোট প্রচেষ্টা, বড় পরিবর্তন</strong><p>সকলের ছোট ছোট প্রচেষ্টাই বড় পরিবর্তন আনতে পারে।</p></div></div>
-                </div>
-                <div class="payment-section card">
-                    <h2><i class="fa-solid fa-money-check-dollar"></i> অনুদান জমা দিন</h2>
-                    <form id="donationForm" data-ajax-form data-url="' . e(url('api/payment-submit')) . '" data-prevent-default>
-                        ' . csrf_field() . '
-                        <div class="form-group"><label>পেমেন্ট মেথড</label><select name="payment_method_id" required>' . $payOptions . '</select></div>
-                        <div class="selected-payment" id="selectedPayment"></div>
-                        <div class="form-group"><label><i class="fa-solid fa-user"></i> আপনার নাম</label><input type="text" name="sender_name" placeholder="আপনার নাম"></div>
-                        <div class="form-group"><label><i class="fa-solid fa-money-bill-wave"></i> টাকার পরিমাণ</label><input type="number" name="amount" min="1" step="0.01" required placeholder="00"></div>
-                        <div class="form-group"><label><i class="fa-brands fa-hash"></i> Trx id <small>(ঐচ্ছিক)</small></label><input type="text" name="trx_id" placeholder="TRX ID"></div>
-                        <div class="form-group">
-                            <label><i class="fa-solid fa-camera"></i> পেমেন্ট স্ক্রিনশট <small>(সর্বোচ্চ 2MB, অটো কম্প্রেস)</small></label>
-                            <div class="upload-zone single" id="paymentUploadZone">
-                                <input type="file" id="paymentScreenshot" name="payment_screenshot" accept="image/*">
-                                <div class="upload-empty"><i class="fa-solid fa-cloud-arrow-up"></i><p>পেমেন্ট স্ক্রিনশট নির্বাচন করুন</p></div>
-                                <div class="upload-preview" id="paymentPreview"></div>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-lg" style="width:100%"><i class="fa-solid fa-hand-holding-dollar"></i> তথ্য জমা দিন</button>
-                    </form>
-                </div>
-            </div>
-            <div class="payment-methods card">
-                <h2><i class="fa-solid fa-building-columns"></i> পেমেন্ট মেথড</h2>
-                <div class="pay-list">' . ($cards ?: '<div class="empty-inline">এখনো পেমেন্ট মেথড যোগ করা হয়নি।</div>') . '</div>
-            </div>
-        </section>';
+if (!function_exists('page_trending')) {
+    function page_trending(): string {
+        $perPage=max(10,(int)setting('items_per_page','20'));
+        $current=max(1,(int)($_GET['page']??1));
+        $total=count_jobs('status="published"');
+        $pg=paginate($total,$perPage,$current);
+        $jobs=get_jobs($perPage,$pg['offset'],'status="published"',[],'impressions DESC, views DESC, created_at DESC');
+        $html='<section class="section-block"><div class="section-head"><div><h2 class="section-title"><i class="fa-solid fa-fire"></i> ট্রেন্ডিং</h2><p class="section-desc">বেশি দেখা চাকরি • ইমপ্রেশন অনুযায়ী</p></div></div>';
+        $html.='<div class="job-list">'.implode('',array_map(fn($j)=>job_card_html($j),$jobs)).'</div>';
+        $html.=paginate_links($pg['pages'],$pg['current'],'trending');
+        $html.='</section>';
+        return $html;
     }
 }
 
+if (!function_exists('page_notices')) {
+    function page_notices(): string {
+        $notices=db_all('SELECT * FROM notices ORDER BY created_at DESC, id DESC LIMIT 100');
+        $html='<section class="section-block"><div class="section-head"><h2 class="section-title"><i class="fa-solid fa-bell"></i> নোটিশ বোর্ড</h2></div><div class="notice-list">';
+        if(!$notices) $html.='<div class="empty-state"><i class="fa-solid fa-bell-slash"></i><h3>কোনো নোটিশ নেই</h3></div>';
+        else foreach($notices as $n){
+            $html.='<div class="notice-card'.($n['is_important']?' important':'').'"><div class="notice-icon"><i class="fa-solid fa-bell"></i></div><div style="flex:1"><div class="notice-title">'.e($n['title']).'</div><div class="notice-time">'.e(time_ago($n['created_at'])).' • '.e(format_date_bn($n['created_at'])).'</div>'.($n['content']?'<div class="notice-content">'.e($n['content']).'</div>':'').($n['link']?'<a href="'.e($n['link']).'" target="_blank" class="btn btn-soft btn-sm" style="margin-top:8px">বিস্তারিত <i class="fa-solid fa-arrow-up-right-from-square"></i></a>':'').'</div></div>';
+        }
+        $html.='</div></section>';
+        return $html;
+    }
+}
+if (!function_exists('page_notice_detail')) {
+    function page_notice_detail(string $slug): string {
+        $id=(int)$slug; $n=db_fetch('SELECT * FROM notices WHERE id=? LIMIT 1',[$id]); if(!$n) return page_404();
+        $html='<section class="section-block"><div class="notice-card important" style="flex-direction:column"><div class="notice-title" style="font-size:20px">'.e($n['title']).'</div><div class="notice-time">'.e(format_date_bn($n['created_at'])).'</div><div class="notice-content" style="margin-top:12px;font-size:15px">'.nl2br(e($n['content'])).'</div></div><a href="'.e(url('notices')).'" data-link class="btn btn-ghost" style="margin-top:16px"><i class="fa-solid fa-arrow-left"></i> সব নোটিশ</a></section>';
+        return $html;
+    }
+}
+
+if (!function_exists('page_about')) {
+    function page_about(): string {
+        return '<section class="card" style="max-width:800px;margin:auto"><h1 style="font-size:24px;margin-bottom:12px"><i class="fa-solid fa-circle-info"></i> আমাদের সম্পর্কে</h1><p>'.e(setting('site_footer')).'</p><p style="margin-top:12px">CakriCircular.com বাংলাদেশের একটি বিশ্বস্ত চাকরির পোর্টাল। সরকারি, বেসরকারি, ব্যাংক, শিক্ষক নিয়োগসহ সকল চাকরির খবর প্রতিদিন হালনাগাদ করা হয়।</p></section>';
+    }
+}
 if (!function_exists('page_privacy')) {
-    function page_privacy(): string
-    {
-        return '<section class="static-page">
-            <div class="static-card">
-                <h1><i class="fa-solid fa-shield-halved"></i> গোপনীয়তা নীতি</h1>
-                <p>বাংলাদেশ নাগরিক প্ল্যাটফর্মে জমা দেওয়া প্রতিটি তথ্য সম্পূর্ণ গোপনীয়তার সাথে সংরক্ষণ করা হয়।</p>
-                <ul>
-                    <li>রিপোর্ট করার সময় আপনার ব্যক্তিগত তথ্য প্রকাশ করা হয় না।</li>
-                    <li>শুধুমাত্র যাচাইকৃত অ্যাডমিন গোপন তথ্য দেখতে পারেন।</li>
-                    <li>প্রমাণ ছাড়া ফেক রিপোর্ট দিলে আইনত দায়ী থাকতে হবে।</li>
-                    <li>নিরাপত্তা বাড়াতে IP, Device, Browser তথ্য অ্যাডমিন যাচাইয়ে ব্যবহার হয়।</li>
-                    <li>আলাদা ইমেইল/টেলিফোন সংগ্রহ করা হয় না।</li>
-                </ul>
-            </div>
-        </section>';
+    function page_privacy(): string {
+        return '<section class="card" style="max-width:800px;margin:auto"><h1><i class="fa-solid fa-shield-halved"></i> গোপনীয়তা ও নিরাপত্তা</h1><p style="margin-top:12px">আমরা ব্যবহারকারীর তথ্য গোপন রাখি। কোনো ব্যক্তিগত তথ্য তৃতীয় পক্ষের সাথে শেয়ার করা হয় না। সাইটে প্রকাশিত তথ্য যাচাই করে প্রকাশ করা হয়, তবে আবেদন করার আগে অফিসিয়াল বিজ্ঞপ্তি দেখে নিন।</p><ul style="margin:16px 0 0 18px"><li>ব্যবহারকারীর ব্রাউজার, ডিভাইস তথ্য শুধুমাত্র অ্যানালিটিকসের জন্য ব্যবহার হয়।</li><li>ভুল তথ্য রিপোর্ট করলে আমরা দ্রুত সংশোধন করি।</li><li>কোনো ফি প্রদানের আগে অফিসিয়াল সোর্স যাচাই করুন।</li></ul></section>';
     }
 }
-
-if (!function_exists('page_report_detail')) {
-    function page_report_detail(string $reportNo): string
-    {
-        $report = db_fetch(
-            'SELECT r.*, c.name AS category_name, c.color AS category_color, c.icon AS category_icon
-             FROM reports r LEFT JOIN categories c ON c.id=r.category_id
-             WHERE r.report_no = ? LIMIT 1', [$reportNo]
-        );
-        if (!$report || $report['status'] !== 'approved') {
-            http_response_code(404);
-            return page_404();
-        }
-        $report = package_report($report);
-        $html = '<section class="detail-page"><div class="detail-topbar"><a href="' . e(url('')) . '" data-link class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> হোম</a><span class="detail-title"><i class="fa-solid fa-file-invoice"></i> ' . e($report['report_no']) . '</span></div>';
-        $html .= report_card_html($report, $report);
-        $html .= '<a href="' . e(url('report')) . '" data-link class="btn btn-primary btn-lg detail-footer"><i class="fa-solid fa-plus"></i> নতুন রিপোর্ট জমা দিন</a></section>';
-        return $html;
+if (!function_exists('page_contact')) {
+    function page_contact(): string {
+        $email=setting('contact_email'); $addr=setting('contact_address'); $phone=setting('contact_phone');
+        return '<section class="card" style="max-width:600px;margin:auto"><h1><i class="fa-solid fa-envelope"></i> যোগাযোগ করুন</h1><div style="margin-top:16px;display:grid;gap:10px"><div><i class="fa-solid fa-at"></i> '.e($email).'</div><div><i class="fa-solid fa-location-dot"></i> '.e($addr).'</div>'.($phone?'<div><i class="fa-solid fa-phone"></i> '.e($phone).'</div>':'').'</div><div class="social-links" style="margin-top:16px">'.(setting('facebook_url')?'<a href="'.e(setting('facebook_url')).'" target="_blank"><i class="fa-brands fa-facebook"></i></a>':'').(setting('telegram_url')?'<a href="'.e(setting('telegram_url')).'" target="_blank"><i class="fa-brands fa-telegram"></i></a>':'').'</div></section>';
     }
 }
-
-if (!function_exists('report_detail_meta')) {
-    function report_detail_meta(string $reportNo): array
-    {
-        $report = db_fetch('SELECT * FROM reports WHERE report_no=? LIMIT 1', [$reportNo]);
-        if (!$report) return default_meta();
-        $image = '';
-        $img = db_fetch('SELECT file FROM report_images WHERE report_id=? ORDER BY id ASC LIMIT 1', [$report['id']]);
-        if ($img) $image = uploads_url($img['file']);
-        return [
-            'title' => 'রিপোর্ট: ' . $report['name'] . ' | ' . setting('site_name'),
-            'description' => mb_substr($report['details'], 0, 180),
-            'keywords' => setting('site_keywords'),
-            'image' => $image,
-            'url' => url('report/' . $report['report_no']),
-            'type' => 'article',
-        ];
+if (!function_exists('page_report_wrong')) {
+    function page_report_wrong(): string {
+        return '<section class="card" style="max-width:640px;margin:auto"><h1><i class="fa-solid fa-flag"></i> তথ্যের ভুল রিপোর্ট করুন</h1><p style="color:var(--muted);margin:8px 0 16px">কোনো তথ্য ভুল মনে হলে নিচের ফর্ম পূরণ করুন।</p><form id="wrongReportForm" data-ajax-form data-url="'.e(url('api/report-wrong')).'"><div class="form-group"><label>আপনার নাম</label><input name="name" required></div><div class="form-group"><label>ইমেইল</label><input type="email" name="email" required></div><div class="form-group"><label>শিরোনাম</label><input name="title" required placeholder="কোন চাকরির ভুল"></div><div class="form-group"><label>বিস্তারিত</label><textarea name="details" rows="5" required placeholder="ভুলটি বিস্তারিত লিখুন"></textarea></div>'.csrf_field().'<button class="btn btn-primary btn-lg" style="width:100%"><i class="fa-solid fa-paper-plane"></i> রিপোর্ট পাঠান</button></form></section>';
     }
 }
-
 if (!function_exists('page_404')) {
-    function page_404(): string
-    {
-        return '<section class="notfound-page">
-            <div class="nf-code">৪০৪</div>
-            <div class="nf-icon"><i class="fa-solid fa-ghost"></i></div>
-            <h1>পেজটি খুঁজে পাওয়া যায়নি</h1>
-            <p>আপনি যে পেজটি খুঁজছেন সেটি সরানো হয়েছে বা ভুল URL ব্যবহার করেছেন।</p>
-            <div class="nf-actions">
-                <a href="' . e(url('')) . '" data-link class="btn btn-primary"><i class="fa-solid fa-house"></i> হোম এ ফিরে যান</a>
-                <a href="' . e(url('report')) . '" data-link class="btn btn-soft"><i class="fa-solid fa-plus"></i> নতুন রিপোর্ট</a>
-            </div>
-        </section>';
+    function page_404(): string {
+        return '<section class="notfound-page" style="text-align:center;padding:40px 20px"><div style="font-size:80px;font-weight:800;color:var(--primary);opacity:.15">৪০৪</div><div style="font-size:48px;margin-top:-40px"><i class="fa-solid fa-ghost"></i></div><h1 style="margin-top:12px">পেজটি খুঁজে পাওয়া যায়নি</h1><p style="color:var(--muted)">আপনি যে পেজটি খুঁজছেন সেটি সরানো হয়েছে বা ভুল URL।</p><div style="display:flex;gap:10px;justify-content:center;margin-top:18px;flex-wrap:wrap"><a href="'.e(url('')).'" data-link class="btn btn-primary"><i class="fa-solid fa-house"></i> হোম</a><a href="'.e(url('search')).'" data-link class="btn btn-soft">খুঁজুন</a></div></section>';
     }
 }
